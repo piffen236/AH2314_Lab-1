@@ -1,0 +1,250 @@
+---
+title: "lab1"
+author: 'Jesper '
+date: "2023-08-30"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+## This R file shows an example on how to estimate a simple multinomial logit
+## model.
+##
+## The structure of this file is
+##
+## 1. Sourcing of the three R files data.R, loglikelihoods.R, and output.R
+##    (see lab_intstructions.pdf in https://canvas.kth.se/courses/41382/assignments)
+##    Where you read-in and prepare data in data.R, write specification and
+##    log-likelihood functions in log-likelihoods.R. The file output.R contains
+##    functions for processing and printing estimation results.
+##    
+##
+## 2. Specification of a model to estimate, given data prepared in data_R. This
+##    is the setting of the variable MNL_SPEC by the function 'mnl_spec' below.
+##
+## 3. Log-likelihood estimation of model parameters,
+##
+## 4- Printing the result of the estimation
+##
+##
+## To run the sample model estimation, you need to (1) read-in the data for
+## Lab 1 and create the mode availability matrix 'avail', in the file data.r,
+## and (2) to complete the log-likelihood function 'mnl_ll' which is given as
+## a code skeleton in loglikelihoods.R.
+##
+## In an actual lab, you will write specification functions and log-likelihood
+## functions and then iterate over step 2-4 above to find the best model.
+##
+## NOTE. 'est_summary' summary uses a Cholesky decomposition to invert the
+##       Hession from the estimation. Any error message containng "x$hessian"
+##       and/or "chol*" means that the Hessian is not numerically invertible.
+##       This can be handled by scaling the parameters of the model or, in the
+##       worst case, by deleting parameters from the model.
+##        
+
+
+
+
+
+
+## 1. Sourcing needed R-files 
+
+source("data.R")
+source("loglikelihoods.R")
+source("output.R")
+
+
+## 2. Model specification
+
+## Setting of the variable MNL_SPEC by the function 'mnl_spec' below.
+##
+## Note that the utility for an alternative (mode) has to be a vector of
+## length equal to the number of observations (rows) in 'data'. Usually, R can
+## infer this from the variables in the utility expression. The exception is
+## when a utility for an alternative contains only an alternative specific
+## constant (ASC). The vector 'ones' containing only 1's is a remedy for this
+## problem.
+##
+## See the comments in loglikelihoods.R what arguments must be given to 'mnl_spec'
+## in order to specify an MNL model.
+## 
+ones <- rep(1, nrow(df))
+MNL_SPEC = mnl_spec(
+    utils=c(
+        u_car =       p[6]*BILKOST  +p[7]*BILTID,
+        u_pass=p[1] + p[6]*PASSKOST +p[7]*PASSTID,
+        u_bus =p[2] + p[6]*BUSSKOST +p[7]*BUSSTID    +p[8]*BUSSGTID +p[9]*BUSSWTID,
+        u_rail=p[3] + p[6]*TAGKOST  +p[7]*TAGTID     +p[8]*TAGGTID  +p[9]*TAGWTID,
+        u_walk=p[4]                 +p[7]*GANGTID,
+        u_bike=p[5]                 +p[7]*CYKELTID,
+        use.names=FALSE),
+    data=df,
+    choice_var="MODE",
+    nchoice=6,
+    available=avail
+)
+
+
+
+## 3. Model log-likelihood estimation
+
+## Estimation is done by the built-in R function 'nlm'. You should read the
+## help pages for this function carefully. Take special care about the
+## returned value 'code' which tells you whether the optimization converged,
+## and if not, gives direction on how to make it converge.
+##
+## 'nlm' minimizes the objective function, therefore must the log-likelihood
+## function be called with a minus-sign to make sure that it is maximized. In
+## this case 'mnl_ll' is called as -mnl_ll
+##
+## When calling 'nlm' the objective function is must be a function of the
+## parameter vector 'p' only. However, we want to pass the variable MNL_SPEC
+## as an argument to our log-likelihood function 'mnl_ll'. Therefore, it is
+## wrapped inside an anomymous function, as
+##
+##     function(p) { -mnl_ll(p, spec=MNL_SPEC) }
+##
+## which results in a function that has 'p' as its only argument.
+##
+## Always call nlm with 'hessian=TRUE' and 'print_level' at least set to 2. 
+##
+
+system.time(
+    est_res  <-  nlm(function(p) { -mnl_ll(p, spec=MNL_SPEC) },
+                   p=rep(-1.5, 9), hessian=TRUE, print.level=2)
+)
+
+print(paste(toString(est_res)))
+
+## 4. Printing the result of the estimation
+
+## 'est_summary' prints a table of the estimated parameters, showing
+##
+##  1. Parameter names
+##  2. Estimated values
+##  3. Robust standard deviations of the estimates, se (Train, 2009, Sec. 8.6)
+##  4. Z ratios (also called t ratios) of the estiamtes
+##  5. P-values of the estimates.
+##  6. In addition, the maximum log-likelihood value, the convergence code of
+##     the 'nlm' maximization, and the number of iterations used for the
+##     maximization is printed. 
+##
+## 'est_summary' takes the following arguments
+##
+##      res        the returned value from an 'nlm' optimization
+##
+##      llc_fun    the function giving the log-likelihood contribution for each
+##                 observation in model data. This should be exactly the
+##                 log-likelihood function given as objective function to
+##                 'nlm', but with the argument 'sum=FALSE' added. In this case
+##
+##                      function(p) { -mnl_ll(p, spec=MNL_SPEC, sum=FALSE) }
+##
+##      par_names  a vector of parameter names (to p[1] - p[6], in this case,
+##                 that you provide.
+##                 
+est_summary(res=est_res,
+            llc_fun=function(p) { -mnl_ll(p, spec=MNL_SPEC, sum=FALSE) },
+            par_names=c("asc_pass", "asc_bus", "asc_rail",
+                        "asc_walk", "asc_bike", "cost","time", "Walk time", "Wait time")
+            )
+##
+## Estimation output.
+##
+##   Parameter    Estimate   Rob. ste    Z ratio    P-value
+## 1  asc_pass -1.45235594 0.04053298 -35.831462 0.00000000
+## 2   asc_bus -1.59587339 0.05282285 -30.211802 0.00000000
+## 3  asc_rail -1.50379854 0.11815977 -12.726823 0.00000000
+## 4  asc_walk -3.80153209 0.12511497 -30.384310 0.00000000
+## 5  asc_bike -1.41590133 0.04826013 -29.338949 0.00000000
+## 6      cost  0.02177317 0.01085486   2.005845 0.04487279
+## 
+## Maximum log-likelihood: -6231.605 
+## 
+## Convergence code: 1
+## Iterations: 35 
+
+```
+
+
+```{r}
+
+## a list to store results for different scenarios
+results_list <- list()
+
+## Define scenarios
+scenarios <- list(
+  'Base' = function(data) {data},
+  'Frequent buses' = function(data) {data$BUSSWTID <- data$BUSSWTID/2; data},
+  'More bus stops' = function(data) {data$BUSSGTID <- data$BUSSGTID/2; data}
+)
+
+## Loop through each scenario
+for (scenario_name in names(scenarios)) {
+  
+  ## empty dataframe to hold the results
+  results_df <- data.frame()
+  
+  ## List of modes to loop through
+  modes <- c(1,2,3,4,5,6)
+  
+  ## Apply scenario
+  prediction_data <- scenarios[[scenario_name]](df)
+  
+  ## Loop through each mode
+  for (mode in modes) {
+    ## Prepare a prediction data set
+    prediction_data$MODE <- mode
+    
+    ## Update the MNL_SPEC
+    updated_MNL_SPEC = mnl_spec(
+      utils=c(
+        u_car =       p[6]*BILKOST  +p[7]*BILTID,
+        u_pass=p[1] + p[6]*PASSKOST +p[7]*PASSTID,
+        u_bus =p[2] + p[6]*BUSSKOST +p[7]*BUSSTID    +p[8]*BUSSGTID +p[9]*BUSSWTID,
+        u_rail=p[3] + p[6]*TAGKOST  +p[7]*TAGTID     +p[8]*TAGGTID  +p[9]*TAGWTID,
+        u_walk=p[4]                 +p[7]*GANGTID,
+        u_bike=p[5]                 +p[7]*CYKELTID,
+        use.names=FALSE),
+      data=prediction_data,
+      choice_var="MODE",
+      nchoice=6,
+      available=avail
+    )
+    
+    ## Call mnl_ll to get the predicted probabilities
+    predicted_probs <- mnl_ll(p=est_res$estimate, spec=updated_MNL_SPEC, probs=TRUE)
+    
+    ## Add the predicted probabilities to a new column in prediction_data
+    prediction_data$predicted_prob <- predicted_probs
+    
+    ## add to results_df
+    results_df <- rbind(results_df, prediction_data)
+  }
+  
+  # add scenario name to results_df
+  results_df$Scenario <- scenario_name
+  
+  # add results_df to results_list
+  results_list[[scenario_name]] <- results_df
+}
+
+# Combine all scenarios into one dataframe
+all_results_df <- do.call(rbind, results_list)
+
+# Calc mean predicted probabilities for each mode and scenario
+aggregated_results <- aggregate(predicted_prob ~ MODE + Scenario, data=all_results_df, FUN=mean)
+
+## Ploting
+library(ggplot2)
+ggplot(aggregated_results, aes(x=MODE, y=predicted_prob, color=Scenario)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6)) +
+  ggtitle("Mean Predicted Probabilities for Different Modes Across Scenarios")
+
+
+
+```
+
