@@ -55,11 +55,15 @@ mnl_ll <- function(p, spec, probs=FALSE, sum=TRUE)
 
     ## We add the availability matrix to the utility matrix
     ## This "removes" (sets to -inf) the unavailable modes
-    u <- u + spec$avail
+    #browser()
+    #print(u)
+    #u <- u + spec$avail
     ## calc the exp of u, this will bethe numerator
     num <- exp(u)
+    #print(num)
     ## in the same way we calc the denominator
     denom <- rowSums(num)
+    #print(denom)
     ## calc the prop of each mode
     p_mnl <- num / matrix(denom, nrow = spec$nobs, ncol = spec$nchoice, byrow = TRUE)
     
