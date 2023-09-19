@@ -8,9 +8,9 @@
 ##
 varset3 <- readRDS("~/Documents/R School/Lab 1/varset3.rds")
 ## create  Mtrix determining what is available, this is a T/F matrix
-avail <- data.frame(varset3$BILOK,varset3$CYKELOK,varset3$BUSSOK,varset3$GANGOK,varset3$PASSOK,varset3$TAGOK)
-avail <- setNames(avail, c("BILOK", "CYKELOK", "BUSSOK", "GANGOK", "PASSOK", "TAGOK"))
-avail <- avail == 1
+avail <- data.frame(varset3$BILOK,varset3$PASSOK,varset3$BUSSOK,varset3$TAGOK,varset3$GANGOK,varset3$CYKELOK)
+avail <- setNames(avail, c("1", "2", "3", "4", "5", "6"))
+avail <- avail == 1 
 
 library(ggplot2)
 

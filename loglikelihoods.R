@@ -50,48 +50,38 @@ mnl_ll <- function(p, spec, probs=FALSE, sum=TRUE)
 {
     ## 'u' is a matrix with dimension (no. of observations) x (no. of choices),
     ## i.e. observation index are rows and choice index are columns.
+    #browser()
     u <- array(eval(spec$utils, spec$data), c(spec$nobs, spec$nchoice))
+    #print(u)
+    
     ## The rest of your likelihood code goes below this comment.
 
-    ## We add the availability matrix to the utility matrix
+    ## I add the availability matrix to the utility matrix
     ## This "removes" (sets to -inf) the unavailable modes
-    #browser()
-    #print(u)
-    #u <- u + spec$avail
-    ## calc the exp of u, this will bethe numerator
-    num <- exp(u)
-    #print(num)
-    ## in the same way we calc the denominator
-    denom <- rowSums(num)
-    #print(denom)
-    ## calc the prop of each mode
-    p_mnl <- num / matrix(denom, nrow = spec$nobs, ncol = spec$nchoice, byrow = TRUE)
+    u <- u + spec$avail
     
+    ## calc the exp of u, this will bethe numerator
     ## creat a empty array
     chosen_probabilities <- numeric(nrow(spec$index.chosen))
-    
     ## Loop over each row to get the corresponding probability
     ## for the chosen alternative
+    #browser()
     for(i in 1:nrow(spec$index.chosen)) {
       row_idx <- spec$index.chosen[i, 1]
       col_idx <- spec$index.chosen[i, 2]
-      chosen_probabilities[i] <- p_mnl[row_idx, col_idx]
+      chosen_probabilities[i] <- exp(u[i, col_idx])/sum(exp(u[i,]))
     }
-    ## if an alternative is 0, log(0) = -inf
-    ## therefor we add a very small number
-    ## this will still "punush" this outcome as bad
+
     epsilon <- 1e-10
     chosen_probabilities <- chosen_probabilities + epsilon
     
-    # redefine p_mnl so the return statements stay the same
     p_mnl<-chosen_probabilities
-    #print("loglike")
-    #print(sum(log(p_mnl)))
-    #print("p")
-    #print(p)
+    #browser()
     #print(p_mnl)
+    #print(sum(log(p_mnl)))
+
     return(if (probs) {
-               p_mnl
+      p_mnl
            } else if (sum) {
                sum(log(p_mnl))
            } else {
@@ -101,4 +91,56 @@ mnl_ll <- function(p, spec, probs=FALSE, sum=TRUE)
 
 }
 
+gnl_spec <- function(utils, data, choice_var, nchoice, available=NULL, nest_matrix) {  
+  return(list(
+    utils=substitute(utils),
+    data=data,
+    nobs=nrow(data),
+    nchoice=nchoice,
+    avail=log(available),
+    nest_matrix=nest_matrix,
+    index.chosen=array(c(1:nrow(data), data[,choice_var]), c(nrow(data), 2))
+  ))
+}
 
+gnl_ll <- function(p, spec, probs=FALSE, sum=TRUE) {
+  u <- array(eval(spec$utils, spec$data), c(spec$nobs, spec$nchoice))
+  u <- u + spec$avail
+  
+  lambda <- p[10]
+  
+  # Denominator Part
+  denominator <- numeric(nrow(u))
+  for (nest in 1:ncol(spec$nest_matrix)) {
+    nest_value <- numeric(nrow(u))
+    for (choice in 1:ncol(u)) {
+      if (spec$nest_matrix[choice, nest] == 1) {
+        nest_value <- nest_value + exp(u[, choice])^(1 / lambda)
+      }
+    }
+    denominator <- denominator + nest_value^lambda
+  }
+  
+  # Numerator and Overall Probability
+  chosen_probabilities <- numeric(nrow(spec$index.chosen))
+  for (i in 1:nrow(spec$index.chosen)) {
+    row_idx <- spec$index.chosen[i, 1]
+    col_idx <- spec$index.chosen[i, 2]
+    
+    nest_for_choice = which(spec$nest_matrix[col_idx, ] == 1)
+    nest_value <- sum(exp(u[row_idx, spec$nest_matrix[, nest_for_choice] == 1])^(1 / lambda))
+    
+    chosen_probabilities[i] <- (exp(u[row_idx, col_idx])^(1 / lambda) * nest_value^(lambda - 1)) / denominator[row_idx]
+  }
+  
+  epsilon <- 1e-10
+  chosen_probabilities <- chosen_probabilities + epsilon
+  
+  return(if (probs) {
+    chosen_probabilities
+  } else if (sum) {
+    sum(log(chosen_probabilities))
+  } else {
+    log(chosen_probabilities)
+  })
+}

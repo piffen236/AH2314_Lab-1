@@ -1,13 +1,3 @@
----
-title: "lab1"
-author: 'Jesper '
-date: "2023-08-30"
-output:
-  word_document: default
-  html_document: default
-  pdf_document: default
----
-
 ```{r}
 ## This R file shows an example on how to estimate a simple multinomial logit
 ## model.
@@ -80,7 +70,7 @@ MNL_SPEC = mnl_spec(
         u_walk=p[4]                 +p[7]*GANGTID,
         u_bike=p[5]                 +p[7]*CYKELTID,
         use.names=FALSE),
-    data=df,
+    data=varset3,
     choice_var="MODE",
     nchoice=6,
     available=avail
@@ -113,7 +103,7 @@ MNL_SPEC = mnl_spec(
 
 system.time(
     est_res  <-  nlm(function(p) { -mnl_ll(p, spec=MNL_SPEC) },
-                   p=rep(-1.5, 9), hessian=TRUE, print.level=2)
+                   p=rep(-1, 9), hessian=TRUE, print.level=2)
 )
 
 print(paste(toString(est_res)))
@@ -150,27 +140,8 @@ est_summary(res=est_res,
             par_names=c("asc_pass", "asc_bus", "asc_rail",
                         "asc_walk", "asc_bike", "cost","time", "Walk time", "Wait time")
             )
-##
-## Estimation output.
-##
-##   Parameter    Estimate   Rob. ste    Z ratio    P-value
-## 1  asc_pass -1.45235594 0.04053298 -35.831462 0.00000000
-## 2   asc_bus -1.59587339 0.05282285 -30.211802 0.00000000
-## 3  asc_rail -1.50379854 0.11815977 -12.726823 0.00000000
-## 4  asc_walk -3.80153209 0.12511497 -30.384310 0.00000000
-## 5  asc_bike -1.41590133 0.04826013 -29.338949 0.00000000
-## 6      cost  0.02177317 0.01085486   2.005845 0.04487279
-## 
-## Maximum log-likelihood: -6231.605 
-## 
-## Convergence code: 1
-## Iterations: 35 
-
 ```
-
-
 ```{r}
-
 ## a list to store results for different scenarios
 results_list <- list()
 
@@ -191,7 +162,7 @@ for (scenario_name in names(scenarios)) {
   modes <- c(1,2,3,4,5,6)
   
   ## Apply scenario
-  prediction_data <- scenarios[[scenario_name]](df)
+  prediction_data <- scenarios[[scenario_name]](varset3)
   
   ## Loop through each mode
   for (mode in modes) {
@@ -244,7 +215,65 @@ ggplot(aggregated_results, aes(x=MODE, y=predicted_prob, color=Scenario)) +
   scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6)) +
   ggtitle("Mean Predicted Probabilities for Different Modes Across Scenarios")
 
+```
 
 
+```{r}
+source("data.R")
+source("loglikelihoods.R")
+source("output.R")
+
+nest_matrix <- matrix(c(0, 1,
+                           0, 1,
+                           1, 0,
+                           1, 0,
+                           1, 0,
+                           1, 0), nrow=6, byrow=TRUE)
+colnames(nest_matrix) <- c("Weather-Dependent", "Weather-Independent")
+rownames(nest_matrix) <- c("Car", "Car pass.", "Bus", "Rail", "Walk", "Bike")
+
+# Normalize independent variables except for 'MODE'
+df <- as.data.frame(lapply(names(df), function(name) {
+  if (name != "MODE" && is.numeric(df[[name]])) {
+    x <- df[[name]]
+    return((x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+  } else {
+    return(df[[name]])
+  }
+}))
+
+# Assign names to the DataFrame after lapply returns a list
+names(df) <- names(df)
+
+GNL_SPEC = gnl_spec(
+    utils=c(
+        u_car =       p[6]*BILKOST  +p[7]*BILTID,
+        u_pass=p[1] + p[6]*PASSKOST +p[7]*PASSTID,
+        u_bus =p[2] + p[6]*BUSSKOST +p[7]*BUSSTID    +p[8]*BUSSGTID +p[9]*BUSSWTID,
+        u_rail=p[3] + p[6]*TAGKOST  +p[7]*TAGTID     +p[8]*TAGGTID  +p[9]*TAGWTID,
+        u_walk=p[4]                 +p[7]*GANGTID,
+        u_bike=p[5]                 +p[7]*CYKELTID,
+        use.names=FALSE),
+    data=varset3,
+    choice_var="MODE",
+    nchoice=6,
+    available=avail,
+    nest_matrix = nest_matrix
+)
+
+system.time(
+    est_res  <-  nlm(function(p) { -gnl_ll(p, spec=GNL_SPEC) },
+                   p=c(-1,-1,-1,-1,-1,-1,-1,-1,-1,0.2), hessian=TRUE, print.level=2)
+)
+
+print(paste(toString(est_res)))
+
+
+est_summary(res=est_res,
+            llc_fun=function(p) { -gnl_ll(p, spec=GNL_SPEC, sum=FALSE) },
+            par_names=c("asc_pass", "asc_bus", "asc_rail",
+                        "asc_walk", "asc_bike", "cost","time", "Walk time", 
+                        "Wait time", "lambda")
+            )
 ```
 
